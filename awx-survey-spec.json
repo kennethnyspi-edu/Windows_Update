@@ -1,0 +1,57 @@
+{
+  "name": "Windows Update Selection",
+  "description": "Choose which Windows updates to install.",
+  "spec": [
+    {
+      "question_name": "Update Mode",
+      "question_description": "Which category of updates should be installed?",
+      "variable": "update_mode",
+      "type": "multiplechoice",
+      "choices": "security\ncritical\nsecurity_critical\nall\nkb",
+      "default": "security_critical",
+      "required": true
+    },
+    {
+      "question_name": "Specific KB Numbers (only used when Update Mode = kb)",
+      "question_description": "Comma-separated KB numbers, e.g. KB5034441, KB5034439. Ignored unless Update Mode is 'kb'.",
+      "variable": "kb_csv",
+      "type": "text",
+      "default": "",
+      "required": false
+    },
+    {
+      "question_name": "Reject / Exclude List (optional, any mode)",
+      "question_description": "Comma-separated KB numbers or title fragments to always skip, e.g. KB5034441, Malicious Software Removal Tool.",
+      "variable": "reject_csv",
+      "type": "text",
+      "default": "",
+      "required": false
+    },
+    {
+      "question_name": "Dry Run (Report Only)",
+      "question_description": "If Yes, only searches and reports available updates without installing anything.",
+      "variable": "dry_run",
+      "type": "multiplechoice",
+      "choices": "false\ntrue",
+      "default": "false",
+      "required": true
+    },
+    {
+      "question_name": "Auto-Reboot If Required",
+      "question_description": "If Yes, the host reboots automatically when an installed update requires it, and the play continues.",
+      "variable": "reboot_updates",
+      "type": "multiplechoice",
+      "choices": "true\nfalse",
+      "default": "true",
+      "required": true
+    },
+    {
+      "question_name": "Target Hosts / Group",
+      "question_description": "Inventory host, group, or pattern to run against.",
+      "variable": "target_hosts",
+      "type": "text",
+      "default": "windows",
+      "required": true
+    }
+  ]
+}

@@ -1,0 +1,95 @@
+---
+# windows-updates.yml
+#
+# Selective Windows Update installer.
+# Choose ONE mode via the `update_mode` variable:
+#   security          - only Security Updates
+#   critical          - only Critical Updates
+#   security_critical - Security + Critical (recommended default)
+#   all               - every available update category
+#   kb                - only the specific KB article(s) listed in kb_list
+#
+# All variables can be overridden at runtime (-e), via AWX survey, or
+# in group_vars/host_vars. See README.md for AWX survey setup.
+
+- name: Selective Windows Update installation
+  hosts: "{{ target_hosts | default('windows') }}"
+  gather_facts: false
+
+  vars:
+    # ---- Selection ----
+    update_mode: "{{ update_mode | default('security_critical') }}"   # security | critical | security_critical | all | kb
+
+    # kb_list / reject_list can be passed directly as YAML lists (CLI/vars files),
+    # OR left as a comma-separated string via kb_csv / reject_csv (AWX survey text fields).
+    kb_csv: "{{ kb_csv | default('') }}"
+    reject_csv: "{{ reject_csv | default('') }}"
+    kb_list: "{{ kb_list | default(kb_csv.split(',') | map('trim') | reject('equalto', '') | list) }}"
+    reject_list: "{{ reject_list | default(reject_csv.split(',') | map('trim') | reject('equalto', '') | list) }}"
+
+    # ---- Behavior ----
+    dry_run: "{{ dry_run | default(false) | bool }}"                  # true = report only, do not install
+    reboot_updates: "{{ reboot_updates | default(true) | bool }}"     # auto-reboot if an installed update needs it
+    reboot_timeout: "{{ reboot_timeout | default(1800) }}"            # seconds to wait for host after reboot
+
+    # ---- Internal: map mode -> WU category names ----
+    _category_map:
+      security: ["SecurityUpdates"]
+      critical: ["CriticalUpdates"]
+      security_critical: ["SecurityUpdates", "CriticalUpdates"]
+      all: ["*"]
+      kb: ["*"]
+
+    _valid_modes: "{{ _category_map.keys() | list }}"
+    _update_state: "{{ 'searched' if dry_run else 'installed' }}"
+
+  tasks:
+    - name: Validate update_mode
+      ansible.builtin.assert:
+        that:
+          - update_mode in _valid_modes
+        fail_msg: >-
+          update_mode='{{ update_mode }}' is invalid. Must be one of: {{ _valid_modes | join(', ') }}
+        success_msg: "update_mode '{{ update_mode }}' accepted."
+
+    - name: Validate kb_list is provided when update_mode is 'kb'
+      ansible.builtin.assert:
+        that:
+          - kb_list | length > 0
+        fail_msg: "update_mode is 'kb' but kb_list is empty. Provide at least one KB number, e.g. ['KB5034441']."
+      when: update_mode == 'kb'
+
+    - name: Show what this run will do
+      ansible.builtin.debug:
+        msg:
+          - "Host: {{ inventory_hostname }}"
+          - "Mode: {{ update_mode }}  ->  categories: {{ _category_map[update_mode] }}"
+          - "KB filter (accept_list): {{ kb_list if update_mode == 'kb' else 'n/a' }}"
+          - "Reject list: {{ reject_list if reject_list | length > 0 else 'none' }}"
+          - "Dry run (search only): {{ dry_run }}"
+          - "Auto-reboot: {{ reboot_updates }}"
+
+    - name: Search / install Windows updates
+      ansible.windows.win_updates:
+        category_names: "{{ _category_map[update_mode] }}"
+        accept_list: "{{ kb_list if update_mode == 'kb' else omit }}"
+        reject_list: "{{ reject_list if reject_list | length > 0 else omit }}"
+        state: "{{ _update_state }}"
+        reboot: "{{ reboot_updates }}"
+        reboot_timeout: "{{ reboot_timeout }}"
+        log_path: "C:\\ansible_windows_updates.log"
+      register: wu_result
+
+    - name: Report results
+      ansible.builtin.debug:
+        msg:
+          - "Updates found:      {{ wu_result.found_update_count | default('n/a') }}"
+          - "Updates installed:  {{ wu_result.installed_update_count | default('n/a') }}"
+          - "Failed count:       {{ wu_result.failed_update_count | default(0) }}"
+          - "Reboot required:    {{ wu_result.reboot_required | default(false) }}"
+          - "Filtered results:   {{ wu_result.filtered_updates | default({}) }}"
+
+    - name: Fail the play if any update failed to install
+      ansible.builtin.fail:
+        msg: "{{ wu_result.failed_update_count }} update(s) failed to install. See C:\\ansible_windows_updates.log on the host."
+      when: (wu_result.failed_update_count | default(0)) | int > 0

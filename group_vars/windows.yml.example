@@ -1,0 +1,8 @@
+---
+# Copy to group_vars/windows.yml and adjust, or override via AWX survey / -e.
+update_mode: security_critical   # security | critical | security_critical | all | kb
+kb_list: []
+reject_list: []
+dry_run: false
+reboot_updates: true
+reboot_timeout: 1800
