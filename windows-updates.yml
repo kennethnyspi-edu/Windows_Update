@@ -13,7 +13,8 @@
 # in group_vars/host_vars. See README.md for AWX survey setup.
 
 - name: Selective Windows Update installation
-  hosts: "{{ target_hosts | default('windows') }}"
+  #hosts: "{{ target_hosts | default('windows') }}"
+  hosts: all
   gather_facts: false
 
   vars:
